@@ -99,7 +99,7 @@ private:
     int N, E, Times;
     double Pc, Pm, epsilon;
 
-    //解码，返回第i个个体的表现型
+    //解码，返回第i个个体的函数值
     double decode(std::vector<std::vector<int>> &individual, int i)
     {
         //解码值x1,x2
@@ -127,8 +127,8 @@ private:
     {
         for (int i = 0; i < N; i++)
         {
-            //个体i的基因型解码为表现型
-            fit[i] = (float) 1 / decode(individual, i);
+            //个体i的基因型解码计算适应力
+            fit[i] = (float) 1.0 / decode(individual, i);
         }
     }
 
@@ -157,7 +157,7 @@ private:
                     if (!repeat)   //当前精英未重复
                     {
                         maxFit = fit[j];
-                        eliteValue[i] = (float) 1 / maxFit;
+                        eliteValue[i] = (float) 1.0 / maxFit;
                         eliteNum[i] = j;
                         for (int bit = 0; bit < optF.x1Size + optF.x2Size; bit++)
                         {
@@ -214,10 +214,10 @@ private:
     //两点交叉，单点变异
     void indiCrossVariation(std::vector<std::vector<int>> &pool)
     {
-        for (int i = 0; i < N / 2; i++)
+        for (int i = 0; i < N / 2; i+=2)
         {
             //随机值小于交叉概率则进行两点交叉
-            if (this->Pc <= u(e))
+            if (this->Pc >= u(e))
             {
                 //在交叉池内进行两点交叉
                 unsigned left = e() % optF.x1Size + optF.x2Size, right = e() % optF.x1Size + optF.x2Size;
@@ -228,23 +228,26 @@ private:
                 //对交叉的个体的两个后代进行单点变异
                 for (int j = 0; j < optF.x1Size + optF.x2Size; j++)
                 {
-                    if (this->Pm <= u(e))
+                    if (this->Pm >= u(e))
                     {
                         pool[i][j] ^= 1;
+                    }
+                    if (this->Pm >= u(e))
+                    {
+                        pool[i+1][j] ^= 1;
                     }
                 }
             }
         }
     }
 
-    //计算交叉池个体的表现型
+    //计算交叉池个体的适应力
     void calculationFit(std::vector<std::vector<int>> &doubleIndi, double doubleFit[])
     {
-        //计算表现型
+        //计算适应力
         for (int i = 0; i < N * 2; i++)
         {
-            //个体i的基因型解码为表现型
-            doubleFit[i] = decode(doubleIndi, i);
+            doubleFit[i] = (float)1.0 / decode(doubleIndi, i);
         }
     }
 
@@ -264,10 +267,10 @@ private:
         }
     }
 
-    void UpdatePopulation(std::vector<std::vector<int>> &individual, std::vector<std::vector<int>> &pool,
+    void updatePopulation(std::vector<std::vector<int>> &individual, std::vector<std::vector<int>> &pool,
                           std::vector<std::vector<int>> &eliteGene)
     {
-        //把父代和子代放入种群池DoubleIndi
+        //把父代和子代放入种群池doubleIndi
         std::vector<std::vector<int>> doubleIndi(2 * this->N, std::vector<int>(optF.x1Size + optF.x2Size));
         int i, j;
         for (i = 0; i < N; i++)
@@ -342,7 +345,7 @@ private:
     {
         auto x1 = new double[N], x2 = new double[N];
         decodeX(eliteGene, x1, 0, optF.x1Size - 1, 1);
-        decodeX(eliteGene, x2, optF.x1Size, optF.x1Size + optF.x2Size, 2);
+        decodeX(eliteGene, x2, optF.x1Size, optF.x1Size + optF.x2Size - 1, 2);
         //输出精英的适应值
         for (int i = 0; i < E; i++)
         {
@@ -377,7 +380,7 @@ public:
         this->optF = optF;
         //创建N个初始个体
         std::vector<std::vector<int>> individual(this->N, std::vector<int>(optF.x1Size + optF.x2Size));
-        //存储每个个体的表现型（函数值）
+        //存储每个个体的适应力
         auto fit = new double[this->N];
         //创建E个精英个体
         std::vector<std::vector<int>> eliteGene(this->E, std::vector<int>(optF.x1Size + optF.x2Size));
@@ -396,20 +399,19 @@ public:
         //迭代
         for (int current = 0; current < Times; current++)
         {
-            //计算个体的表现型
+            //计算个体的适应力
             evaluateFit(individual, fit);
-            //保留E个适应度最高的精英：double Elite[E] ，以及它的基因型 int EliteGene[E][x1_size+x2_size]
+            //保留E个适应度最高的精英：double Elite[E] ，以及它的基因型
             saveElite(individual, eliteNum, eliteGene, fit, eliteValue);
-            //轮盘赌选择创建交叉池 int Pool[N][x1_size+x2_size]
+            //轮盘赌选择创建交叉池
             std::vector<std::vector<int>> pool(N, std::vector<int>(optF.x1Size + optF.x2Size));
             createPool(individual, pool, fit);
-            //种群个体间基因在交叉池两点交叉以及单点变异 产生在交叉池中的子代 int Pool[N][x1_size+x2_size]
+            //种群个体间基因在交叉池两点交叉以及单点变异 产生在交叉池中的子代
             indiCrossVariation(pool);
-            //把父代和子代合并，进行轮盘赌选择N-E个个体，更新种群个体 Individual[N-E][x1_size+x2_size]
-            UpdatePopulation(individual, pool, eliteGene);
+            //把父代和子代合并，进行轮盘赌选择N-E个个体，更新种群个体
+            updatePopulation(individual, pool, eliteGene);
             //输出当前代的精英表现形（适应值）以及基因型
-            if (current % 5000 == 0 || current == 49999)
-                outputElite(eliteValue, eliteGene, current);
+            outputElite(eliteValue, eliteGene, current);
         }
 
     }
@@ -419,7 +421,7 @@ public:
 
 int main()
 {
-    GeneticAlgOptimizer geneticAlgOptimizer(1000, 3, 50000, 0.9, 0.06, 0.0001);
+    GeneticAlgOptimizer geneticAlgOptimizer(1000, 3, 100, 0.9, 0.06, 0.0001);
     std::cout << "# 求解函数F1优化问题 #" << std::endl;
     geneticAlgOptimizer.Optimize(f1, -100, 100, -100, 100);
     std::cout << "# 求解函数F2优化问题 #" << std::endl;
